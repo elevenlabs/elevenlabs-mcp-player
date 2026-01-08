@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ReadResourceResult } from "@modelcontextprotocol/sdk/types.js";
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { registerAppTool, registerAppResource, RESOURCE_MIME_TYPE, RESOURCE_URI_META_KEY } from "@modelcontextprotocol/ext-apps/server";
@@ -9,7 +10,6 @@ import { z } from "zod";
 const DIST_DIR = path.join(import.meta.dirname, "dist");
 
 const trackSchema = z.object({
-  id: z.string().describe("Unique identifier for the track"),
   file_path: z.string().describe("Absolute path to the audio file"),
   title: z.string().describe("Display title for the track"),
   artist: z.string().optional().describe("Optional artist name"),
@@ -35,7 +35,7 @@ function createServer(): McpServer {
     "play_audio",
     {
       title: "Play Audio",
-      description: "Adds one or more audio tracks to the ElevenLabs Player queue. Each track requires an id, file_path, and title.",
+      description: "Adds one or more audio tracks to the ElevenLabs Player queue. Each track requires a file_path and title.",
       inputSchema: playAudioInputSchema,
       _meta: { [RESOURCE_URI_META_KEY]: resourceUri },
     },
@@ -47,7 +47,7 @@ function createServer(): McpServer {
         try {
           await fs.access(absolutePath);
           validatedTracks.push({
-            id: track.id,
+            id: crypto.randomUUID(),
             file_path: absolutePath,
             title: track.title,
             artist: track.artist,

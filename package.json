@@ -7,14 +7,13 @@
     "build": "tsc --noEmit && cross-env INPUT=mcp-app.html vite build",
     "watch": "cross-env INPUT=mcp-app.html vite build --watch",
     "serve": "bun server.ts",
-    "start": "cross-env NODE_ENV=development npm run build && npm run serve",
-    "dev": "cross-env NODE_ENV=development concurrently 'npm run watch' 'npm run serve'"
+    "start": "cross-env NODE_ENV=development bun run build && bun run serve",
+    "dev": "cross-env NODE_ENV=development concurrently 'bun run watch' 'bun run serve'"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
-  "packageManager": "pnpm@9.15.4+sha512.b2dc20e2fc72b3e18848459b37359a32064663e5627a51e4c74b2c29dd8e8e0491483c3abb40789cfd578bf362fb6ba8261b05f0387d76792ed6e23ea3b1b6a0",
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "github:modelcontextprotocol/ext-apps",
     "@modelcontextprotocol/sdk": "^1.25.2",
