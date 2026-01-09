@@ -1,6 +1,16 @@
-# ElevenLabs MCP Player
+![export](https://github.com/user-attachments/assets/ee379feb-348d-48e7-899c-134f7f7cd74f)
 
-An MCP (Model Context Protocol) app that provides an audio player UI for playing local audio files. Designed to run within Claude Desktop or other MCP-compatible hosts.
+<div class="title-block" style="text-align: center;" align="center">
+
+  [![Discord Community](https://img.shields.io/badge/discord-@elevenlabs-000000.svg?style=for-the-badge&logo=discord&labelColor=000)](https://discord.gg/elevenlabs)
+  [![Twitter](https://img.shields.io/badge/Twitter-@elevenlabsio-000000.svg?style=for-the-badge&logo=twitter&labelColor=000)](https://x.com/ElevenLabsDevs)
+
+</div>
+
+
+<p align="center">
+  Audio Player <a href="https://github.com/modelcontextprotocol/ext-apps">Model Context Protocol (MCP) app</a> that bun deplays any audio file from within your MCP client.
+</p>
 
 ## What it does
 
@@ -17,7 +27,7 @@ The `play_audio` tool accepts an array of tracks:
 {
   "tracks": [
     {
-      "file_path": "/absolute/path/to/audio.mp3",
+      "filePath": "/absolute/path/to/audio.mp3",
       "title": "Track Title",
       "artist": "Artist Name"
     }
@@ -25,7 +35,7 @@ The `play_audio` tool accepts an array of tracks:
 }
 ```
 
-- `file_path` (required): Absolute path to the audio file
+- `filePath` (required): Absolute path to the audio file
 - `title` (required): Display title
 - `artist` (optional): Artist name
 

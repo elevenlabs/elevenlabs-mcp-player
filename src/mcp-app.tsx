@@ -1,11 +1,12 @@
 /**
  * @file ElevenLabs Player - MCP App for playing audio files
  */
+import type { App } from "@modelcontextprotocol/ext-apps";
 import { useApp } from "@modelcontextprotocol/ext-apps/react";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { StrictMode, useEffect, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { PauseIcon, PlayIcon } from "lucide-react";
+import { PauseIcon, PlayIcon, Repeat, Repeat1 } from "lucide-react";
 
 import {
   AudioPlayerButton,
@@ -40,10 +41,12 @@ interface Track {
 
 interface ServerTrack {
   id: string;
-  file_path: string;
+  filePath: string;
   title: string;
   artist?: string;
 }
+
+type RepeatMode = "none" | "playlist" | "track";
 
 function parseTracksFromResult(callToolResult: CallToolResult): Track[] {
   const textContent = callToolResult.content?.find((c) => c.type === "text");
@@ -52,7 +55,7 @@ function parseTracksFromResult(callToolResult: CallToolResult): Track[] {
       const serverTracks: ServerTrack[] = JSON.parse(textContent.text);
       return serverTracks.map((t) => ({
         id: t.id,
-        src: `http://localhost:3001/audio?path=${encodeURIComponent(t.file_path)}`,
+        src: `http://localhost:3001/audio?path=${encodeURIComponent(t.filePath)}`,
         data: { title: t.title, artist: t.artist },
       }));
     } catch {
@@ -67,13 +70,13 @@ function ElevenLabsPlayerApp() {
   const { app, error } = useApp({
     appInfo: IMPLEMENTATION,
     capabilities: {},
-    onAppCreated: (app) => {
+    onAppCreated: (app: App) => {
       app.onteardown = async () => {
         log.info("App is being torn down");
         return {};
       };
 
-      app.ontoolresult = async (result) => {
+      app.ontoolresult = async (result: CallToolResult) => {
         const newTracks = parseTracksFromResult(result);
         if (newTracks.length > 0) {
           setTracks((prev) => {
@@ -146,7 +149,45 @@ function TrackListItem({ track, trackNumber }: { track: Track; trackNumber: numb
   );
 }
 
-function Player() {
+interface RepeatButtonProps {
+  mode: RepeatMode;
+  onToggle: () => void;
+}
+
+function RepeatButton({ mode, onToggle }: RepeatButtonProps) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={onToggle}
+      className={cn(
+        "h-8 w-8",
+        mode === "none" && "text-muted-foreground/50 hover:text-muted-foreground",
+        mode !== "none" && "text-primary bg-primary/10 hover:bg-primary/20"
+      )}
+      title={
+        mode === "none"
+          ? "Repeat off"
+          : mode === "playlist"
+          ? "Repeat playlist"
+          : "Repeat track"
+      }
+    >
+      {mode === "track" ? (
+        <Repeat1 className="h-4 w-4" />
+      ) : (
+        <Repeat className="h-4 w-4" />
+      )}
+    </Button>
+  );
+}
+
+interface PlayerProps {
+  repeatMode: RepeatMode;
+  onRepeatToggle: () => void;
+}
+
+function Player({ repeatMode, onRepeatToggle }: PlayerProps) {
   const player = useAudioPlayer<TrackData>();
 
   return (
@@ -174,6 +215,7 @@ function Player() {
             <AudioPlayerProgress className="flex-1" />
             <AudioPlayerDuration className="text-xs tabular-nums" />
             <AudioPlayerSpeed variant="ghost" size="icon" />
+            <RepeatButton mode={repeatMode} onToggle={onRepeatToggle} />
           </div>
         </div>
       </div>
@@ -182,9 +224,18 @@ function Player() {
 }
 
 function AudioPlayerContent({ tracks }: { tracks: Track[] }) {
-  const player = useAudioPlayer();
+  const player = useAudioPlayer<TrackData>();
   const initializedRef = useRef(false);
   const prevTracksLengthRef = useRef(0);
+  const [repeatMode, setRepeatMode] = useState<RepeatMode>("none");
+
+  const cycleRepeatMode = () => {
+    setRepeatMode((prev) => {
+      if (prev === "none") return "playlist";
+      if (prev === "playlist") return "track";
+      return "none";
+    });
+  };
 
   // Auto-select first track when tracks are first added
   useEffect(() => {
@@ -202,6 +253,37 @@ function AudioPlayerContent({ tracks }: { tracks: Track[] }) {
     prevTracksLengthRef.current = tracks.length;
   }, [tracks, player]);
 
+  // Set audio loop property based on repeat mode
+  useEffect(() => {
+    const audio = player.ref.current;
+    if (audio) {
+      audio.loop = repeatMode === "track";
+    }
+  }, [repeatMode, player.ref]);
+
+  // Auto-advance to next track when current one ends
+  useEffect(() => {
+    const audio = player.ref.current;
+    if (!audio) return;
+
+    const handleEnded = () => {
+      // If repeat track is on, the audio element handles looping via loop property
+      if (repeatMode === "track") return;
+
+      const currentIndex = tracks.findIndex((t) => t.id === player.activeItem?.id);
+      if (currentIndex >= 0 && currentIndex < tracks.length - 1) {
+        // Play next track
+        player.play(tracks[currentIndex + 1]);
+      } else if (repeatMode === "playlist" && tracks.length > 0) {
+        // Loop back to first track
+        player.play(tracks[0]);
+      }
+    };
+
+    audio.addEventListener("ended", handleEnded);
+    return () => audio.removeEventListener("ended", handleEnded);
+  }, [tracks, player, repeatMode]);
+
   if (tracks.length === 0) {
     return (
       <div className="p-6 text-gray-500 text-center italic">
@@ -212,7 +294,7 @@ function AudioPlayerContent({ tracks }: { tracks: Track[] }) {
 
   return (
     <div className="flex flex-col border rounded-lg overflow-hidden bg-background">
-      <Player />
+      <Player repeatMode={repeatMode} onRepeatToggle={cycleRepeatMode} />
       {tracks.length > 1 && (
         <div className="bg-muted/50 border-t">
           <div className="max-h-48 overflow-y-auto">

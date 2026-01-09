@@ -1,6 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ReadResourceResult } from "@modelcontextprotocol/sdk/types.js";
-import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { registerAppTool, registerAppResource, RESOURCE_MIME_TYPE, RESOURCE_URI_META_KEY } from "@modelcontextprotocol/ext-apps/server";
@@ -10,7 +9,7 @@ import { z } from "zod";
 const DIST_DIR = path.join(import.meta.dirname, "dist");
 
 const trackSchema = z.object({
-  file_path: z.string().describe("Absolute path to the audio file"),
+  filePath: z.string().describe("Absolute path to the audio file"),
   title: z.string().describe("Display title for the track"),
   artist: z.string().optional().describe("Optional artist name"),
 });
@@ -39,16 +38,18 @@ function createServer(): McpServer {
       inputSchema: playAudioInputSchema,
       _meta: { [RESOURCE_URI_META_KEY]: resourceUri },
     },
-    async ({ tracks }): Promise<CallToolResult> => {
+    async ({ tracks }: z.infer<typeof playAudioInputSchema>): Promise<CallToolResult> => {
       const validatedTracks = [];
+      const batchId = Date.now();
 
-      for (const track of tracks) {
-        const absolutePath = path.resolve(track.file_path);
+      for (let i = 0; i < tracks.length; i++) {
+        const track = tracks[i];
+        const absolutePath = path.resolve(track.filePath);
         try {
           await fs.access(absolutePath);
           validatedTracks.push({
-            id: crypto.randomUUID(),
-            file_path: absolutePath,
+            id: `${batchId}-${i}`,
+            filePath: absolutePath,
             title: track.title,
             artist: track.artist,
           });
