@@ -9,7 +9,11 @@
 
 
 <p align="center">
-  Audio Player <a href="https://github.com/modelcontextprotocol/ext-apps">Model Context Protocol (MCP) app</a> that plays any audio file from within your MCP client.
+  Audio Player <a href="https://github.com/modelcontextprotocol/ext-apps">Model Context Protocol (MCP) app</a> that plays any audio file from within your MCP client.      
+</p>
+
+<p align="center">  
+  <img src="https://github.com/user-attachments/assets/3ab700ed-5e1c-4e21-b969-56696c3b52dd" />
 </p>
 
 ## What it does
