@@ -8,6 +8,35 @@ import { z } from "zod";
 
 const DIST_DIR = path.join(import.meta.dirname, "dist");
 
+const MIME_TYPES: Record<string, string> = {
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".ogg": "audio/ogg",
+  ".m4a": "audio/mp4",
+  ".aac": "audio/aac",
+};
+
+const SIZE_WARNING_THRESHOLD = 5 * 1024 * 1024; // 5MB
+
+interface AudioReadResult {
+  dataUrl: string;
+  sizeWarning?: string;
+}
+
+async function readAudioAsDataUrl(filePath: string): Promise<AudioReadResult> {
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeType = MIME_TYPES[ext] ?? "audio/mpeg";
+  const buffer = await fs.readFile(filePath);
+  const base64 = buffer.toString("base64");
+  const dataUrl = `data:${mimeType};base64,${base64}`;
+
+  const sizeWarning = buffer.length > SIZE_WARNING_THRESHOLD
+    ? `Warning: ${path.basename(filePath)} is ${(buffer.length / 1024 / 1024).toFixed(1)}MB - large files may load slowly`
+    : undefined;
+
+  return { dataUrl, sizeWarning };
+}
+
 const trackSchema = z.object({
   filePath: z.string().describe("Absolute path to the audio file"),
   title: z.string().describe("Display title for the track"),
@@ -40,6 +69,7 @@ function createServer(): McpServer {
     },
     async ({ tracks }: z.infer<typeof playAudioInputSchema>): Promise<CallToolResult> => {
       const validatedTracks = [];
+      const warnings: string[] = [];
       const batchId = Date.now();
 
       for (let i = 0; i < tracks.length; i++) {
@@ -47,9 +77,11 @@ function createServer(): McpServer {
         const absolutePath = path.resolve(track.filePath);
         try {
           await fs.access(absolutePath);
+          const { dataUrl, sizeWarning } = await readAudioAsDataUrl(absolutePath);
+          if (sizeWarning) warnings.push(sizeWarning);
           validatedTracks.push({
             id: `${batchId}-${i}`,
-            filePath: absolutePath,
+            src: dataUrl,
             title: track.title,
             artist: track.artist,
           });
@@ -62,9 +94,16 @@ function createServer(): McpServer {
       }
 
       // Return the tracks as JSON for the app to parse
-      return {
-        content: [{ type: "text", text: JSON.stringify(validatedTracks) }]
-      };
+      const content: CallToolResult["content"] = [
+        { type: "text", text: JSON.stringify(validatedTracks) }
+      ];
+
+      // Add warnings as separate text content if any
+      if (warnings.length > 0) {
+        content.push({ type: "text", text: warnings.join("\n") });
+      }
+
+      return { content };
     },
   );
 

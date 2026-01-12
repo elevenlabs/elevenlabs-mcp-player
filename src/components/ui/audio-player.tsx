@@ -267,7 +267,7 @@ export function AudioPlayerProvider<TData = unknown>({
   return (
     <AudioPlayerContext.Provider value={api as AudioPlayerApi<unknown>}>
       <AudioPlayerTimeContext.Provider value={time}>
-        <audio ref={audioRef} className="hidden" crossOrigin="anonymous" />
+        <audio ref={audioRef} className="hidden" />
         {children}
       </AudioPlayerTimeContext.Provider>
     </AudioPlayerContext.Provider>

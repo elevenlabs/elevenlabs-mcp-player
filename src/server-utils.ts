@@ -7,6 +7,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import cors from "cors";
+import express from "express";
 import type { Request, Response } from "express";
 import fs from "node:fs";
 import path from "node:path";
@@ -34,13 +35,89 @@ export async function startServer(
 }
 
 /**
+ * Handler for serving audio files with Range request support.
+ */
+function handleAudioRequest(req: Request, res: Response): void {
+  const filePath = req.query.path as string;
+  if (!filePath) {
+    res.status(400).send("Missing path query parameter");
+    return;
+  }
+
+  const absolutePath = path.resolve(filePath);
+  if (!fs.existsSync(absolutePath)) {
+    res.status(404).send("File not found");
+    return;
+  }
+
+  const stat = fs.statSync(absolutePath);
+  const fileSize = stat.size;
+  const ext = path.extname(absolutePath).toLowerCase();
+  const mimeTypes: Record<string, string> = {
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".ogg": "audio/ogg",
+    ".m4a": "audio/mp4",
+    ".aac": "audio/aac",
+  };
+  const contentType = mimeTypes[ext] ?? "application/octet-stream";
+
+  const range = req.headers.range;
+  if (range) {
+    const parts = range.replace(/bytes=/, "").split("-");
+    const start = parseInt(parts[0], 10);
+    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    const chunkSize = end - start + 1;
+
+    res.writeHead(206, {
+      "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+      "Accept-Ranges": "bytes",
+      "Content-Length": chunkSize,
+      "Content-Type": contentType,
+    });
+    fs.createReadStream(absolutePath, { start, end }).pipe(res);
+  } else {
+    res.writeHead(200, {
+      "Content-Length": fileSize,
+      "Content-Type": contentType,
+      "Accept-Ranges": "bytes",
+    });
+    fs.createReadStream(absolutePath).pipe(res);
+  }
+}
+
+/**
+ * Starts a simple HTTP server just for serving audio files.
+ * Used when running in stdio mode.
+ */
+function startAudioFileServer(): void {
+  const port = parseInt(process.env.PORT ?? "3001", 10);
+  const app = express();
+  app.use(cors());
+
+  app.get("/audio", (req, res) => {
+    console.error(`[Audio Server] Request for: ${req.query.path}`);
+    handleAudioRequest(req, res);
+  });
+
+  app.listen(port, () => {
+    console.error(`[Audio Server] Listening on http://localhost:${port}/audio`);
+  }).on("error", (err) => {
+    console.error(`[Audio Server] Failed to start: ${err.message}`);
+  });
+}
+
+/**
  * Starts an MCP server with stdio transport.
+ * Also starts an HTTP server to serve audio files.
  *
  * @param createServer - Factory function that creates a new McpServer instance.
  */
 export async function startStdioServer(
   createServer: () => McpServer,
 ): Promise<void> {
+  // Start audio file server alongside stdio transport
+  startAudioFileServer();
   await createServer().connect(new StdioServerTransport());
 }
 
@@ -65,54 +142,7 @@ export async function startStreamableHttpServer(
   expressApp.use(cors());
 
   // Serve local audio files with Range request support
-  expressApp.get("/audio", (req: Request, res: Response) => {
-    const filePath = req.query.path as string;
-    if (!filePath) {
-      res.status(400).send("Missing path query parameter");
-      return;
-    }
-
-    const absolutePath = path.resolve(filePath);
-    if (!fs.existsSync(absolutePath)) {
-      res.status(404).send("File not found");
-      return;
-    }
-
-    const stat = fs.statSync(absolutePath);
-    const fileSize = stat.size;
-    const ext = path.extname(absolutePath).toLowerCase();
-    const mimeTypes: Record<string, string> = {
-      ".mp3": "audio/mpeg",
-      ".wav": "audio/wav",
-      ".ogg": "audio/ogg",
-      ".m4a": "audio/mp4",
-      ".aac": "audio/aac",
-    };
-    const contentType = mimeTypes[ext] ?? "application/octet-stream";
-
-    const range = req.headers.range;
-    if (range) {
-      const parts = range.replace(/bytes=/, "").split("-");
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-      const chunkSize = end - start + 1;
-
-      res.writeHead(206, {
-        "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-        "Accept-Ranges": "bytes",
-        "Content-Length": chunkSize,
-        "Content-Type": contentType,
-      });
-      fs.createReadStream(absolutePath, { start, end }).pipe(res);
-    } else {
-      res.writeHead(200, {
-        "Content-Length": fileSize,
-        "Content-Type": contentType,
-        "Accept-Ranges": "bytes",
-      });
-      fs.createReadStream(absolutePath).pipe(res);
-    }
-  });
+  expressApp.get("/audio", handleAudioRequest);
 
   expressApp.all("/mcp", async (req: Request, res: Response) => {
     // Create fresh server and transport for each request (stateless mode)

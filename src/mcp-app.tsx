@@ -41,7 +41,7 @@ interface Track {
 
 interface ServerTrack {
   id: string;
-  filePath: string;
+  src: string; // Data URL with embedded audio
   title: string;
   artist?: string;
 }
@@ -55,11 +55,11 @@ function parseTracksFromResult(callToolResult: CallToolResult): Track[] {
       const serverTracks: ServerTrack[] = JSON.parse(textContent.text);
       return serverTracks.map((t) => ({
         id: t.id,
-        src: `http://localhost:3001/audio?path=${encodeURIComponent(t.filePath)}`,
+        src: t.src,
         data: { title: t.title, artist: t.artist },
       }));
-    } catch {
-      log.error("Failed to parse tracks from result");
+    } catch (e) {
+      log.error("Failed to parse tracks from result:", e);
     }
   }
   return [];
@@ -67,33 +67,54 @@ function parseTracksFromResult(callToolResult: CallToolResult): Track[] {
 
 function ElevenLabsPlayerApp() {
   const [tracks, setTracks] = useState<Track[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { app, error } = useApp({
     appInfo: IMPLEMENTATION,
     capabilities: {},
     onAppCreated: (app: App) => {
+      log.info("App created successfully");
+
       app.onteardown = async () => {
         log.info("App is being torn down");
         return {};
       };
 
       app.ontoolresult = async (result: CallToolResult) => {
+        log.info("Tool result received:", result);
+        setIsLoading(false);
         const newTracks = parseTracksFromResult(result);
+        log.info("Parsed tracks:", newTracks);
         if (newTracks.length > 0) {
           setTracks((prev) => {
             // Deduplicate by track ID
             const existingIds = new Set(prev.map((t) => t.id));
             const uniqueNewTracks = newTracks.filter((t) => !existingIds.has(t.id));
+            log.info("Adding tracks:", uniqueNewTracks.length);
             return [...prev, ...uniqueNewTracks];
           });
         }
       };
 
-      app.onerror = log.error;
+      app.onerror = (err) => {
+        // Ignore "unknown message ID" errors - these are timing issues during initialization
+        if (err?.message?.includes("unknown message ID")) {
+          log.warn("Ignoring initialization timing error:", err.message);
+          return;
+        }
+        log.error("App error:", err);
+        setIsLoading(false);
+      };
     },
   });
 
-  if (error) return <div className="text-red-500 p-4"><strong>ERROR:</strong> {error.message}</div>;
-  if (!app) return <div className="text-gray-500 p-4">Connecting...</div>;
+  log.info("App state:", { app: !!app, error: error?.message, isLoading });
+
+  // Ignore "unknown message ID" errors - these are timing issues during initialization
+  const isIgnorableError = error?.message?.includes("unknown message ID");
+  if (error && !isIgnorableError) {
+    return <div className="text-red-500 p-4"><strong>ERROR:</strong> {error.message}</div>;
+  }
+  if (!app || isLoading) return <div className="text-gray-500 p-4 italic">Loading audio...</div>;
 
   return <ElevenLabsPlayerAppInner tracks={tracks} />;
 }
