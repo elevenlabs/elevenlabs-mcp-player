@@ -46,9 +46,28 @@ interface ServerTrack {
   artist?: string;
 }
 
+interface PlayAudioStructuredContent {
+  tracks: ServerTrack[];
+  warnings?: string[];
+}
+
 type RepeatMode = "none" | "playlist" | "track";
 
 function parseTracksFromResult(callToolResult: CallToolResult): Track[] {
+  // Prefer structuredContent (v0.4.0+) for type-safe access
+  const structured = callToolResult.structuredContent as PlayAudioStructuredContent | undefined;
+  if (structured?.tracks) {
+    if (structured.warnings?.length) {
+      log.warn("Warnings:", structured.warnings.join(", "));
+    }
+    return structured.tracks.map((t) => ({
+      id: t.id,
+      src: t.src,
+      data: { title: t.title, artist: t.artist },
+    }));
+  }
+
+  // Fallback to parsing text content (backwards compatibility)
   const textContent = callToolResult.content?.find((c) => c.type === "text");
   if (textContent && "text" in textContent) {
     try {
@@ -58,8 +77,8 @@ function parseTracksFromResult(callToolResult: CallToolResult): Track[] {
         src: t.src,
         data: { title: t.title, artist: t.artist },
       }));
-    } catch (e) {
-      log.error("Failed to parse tracks from result:", e);
+    } catch {
+      // Not JSON - likely a summary text, ignore
     }
   }
   return [];
@@ -95,7 +114,7 @@ function ElevenLabsPlayerApp() {
         }
       };
 
-      app.onerror = (err) => {
+      app.onerror = (err: Error | null) => {
         // Ignore "unknown message ID" errors - these are timing issues during initialization
         if (err?.message?.includes("unknown message ID")) {
           log.warn("Ignoring initialization timing error:", err.message);

@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ReadResourceResult } from "@modelcontextprotocol/sdk/types.js";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { registerAppTool, registerAppResource, RESOURCE_MIME_TYPE, RESOURCE_URI_META_KEY } from "@modelcontextprotocol/ext-apps/server";
+import { registerAppTool, registerAppResource, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { startServer } from "./src/server-utils.js";
 import { z } from "zod";
 
@@ -37,10 +37,22 @@ async function readAudioAsDataUrl(filePath: string): Promise<AudioReadResult> {
   return { dataUrl, sizeWarning };
 }
 
-const trackSchema = z.object({
+const trackInputSchema = z.object({
   filePath: z.string().describe("Absolute path to the audio file"),
   title: z.string().describe("Display title for the track"),
   artist: z.string().optional().describe("Optional artist name"),
+});
+
+const trackOutputSchema = z.object({
+  id: z.string(),
+  src: z.string(),
+  title: z.string(),
+  artist: z.string().optional(),
+});
+
+const playAudioOutputSchema = z.object({
+  tracks: z.array(trackOutputSchema),
+  warnings: z.array(z.string()).optional(),
 });
 
 /**
@@ -55,7 +67,7 @@ function createServer(): McpServer {
   const resourceUri = "ui://elevenlabs-player/mcp-app.html";
 
   const playAudioInputSchema = z.object({
-    tracks: z.array(trackSchema).describe("Array of tracks to add to the queue"),
+    tracks: z.array(trackInputSchema).describe("Array of tracks to add to the queue"),
   });
 
   // Register the play_audio tool
@@ -63,9 +75,10 @@ function createServer(): McpServer {
     "play_audio",
     {
       title: "Play Audio",
-      description: "Adds one or more audio tracks to the ElevenLabs Player queue. Each track requires a file_path and title.",
+      description: "Adds one or more audio tracks to the ElevenLabs Player queue. Each track requires a filePath and title.",
       inputSchema: playAudioInputSchema,
-      _meta: { [RESOURCE_URI_META_KEY]: resourceUri },
+      outputSchema: playAudioOutputSchema,
+      _meta: { ui: { resourceUri } },
     },
     async ({ tracks }: z.infer<typeof playAudioInputSchema>): Promise<CallToolResult> => {
       const validatedTracks = [];
@@ -93,17 +106,19 @@ function createServer(): McpServer {
         }
       }
 
-      // Return the tracks as JSON for the app to parse
-      const content: CallToolResult["content"] = [
-        { type: "text", text: JSON.stringify(validatedTracks) }
-      ];
+      // Build structured content for type-safe access
+      const structuredContent = {
+        tracks: validatedTracks,
+        ...(warnings.length > 0 && { warnings }),
+      };
 
-      // Add warnings as separate text content if any
-      if (warnings.length > 0) {
-        content.push({ type: "text", text: warnings.join("\n") });
-      }
+      // Also provide text content for display/fallback
+      const textSummary = `Added ${validatedTracks.length} track(s)${warnings.length > 0 ? `\n${warnings.join("\n")}` : ""}`;
 
-      return { content };
+      return {
+        content: [{ type: "text", text: textSummary }],
+        structuredContent,
+      };
     },
   );
 
