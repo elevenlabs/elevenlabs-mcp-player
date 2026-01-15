@@ -597,6 +597,43 @@ export function AudioPlayerSpeedButtonGroup({
   )
 }
 
+const CYCLE_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const
+
+export interface AudioPlayerSpeedCycleProps
+  extends React.ComponentProps<typeof Button> {
+  speeds?: readonly number[]
+}
+
+export function AudioPlayerSpeedCycle({
+  speeds = CYCLE_SPEEDS,
+  className,
+  variant = "ghost",
+  size = "sm",
+  ...props
+}: AudioPlayerSpeedCycleProps) {
+  const player = useAudioPlayer()
+  const currentSpeed = player.playbackRate
+
+  const handleClick = () => {
+    const currentIndex = speeds.indexOf(currentSpeed)
+    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % speeds.length
+    player.setPlaybackRate(speeds[nextIndex])
+  }
+
+  return (
+    <Button
+      variant={variant}
+      size={size}
+      className={cn("w-[3.5rem] font-mono text-xs", className)}
+      aria-label={`Playback speed: ${currentSpeed}x. Click to change.`}
+      onClick={handleClick}
+      {...props}
+    >
+      {currentSpeed}x
+    </Button>
+  )
+}
+
 export const exampleTracks = [
   {
     id: "0",

@@ -16,43 +16,40 @@ const MIME_TYPES: Record<string, string> = {
   ".aac": "audio/aac",
 };
 
-const SIZE_WARNING_THRESHOLD = 5 * 1024 * 1024; // 5MB
-
-interface AudioReadResult {
-  dataUrl: string;
-  sizeWarning?: string;
-}
-
-async function readAudioAsDataUrl(filePath: string): Promise<AudioReadResult> {
+async function readAudioAsDataUrl(filePath: string): Promise<string> {
   const ext = path.extname(filePath).toLowerCase();
   const mimeType = MIME_TYPES[ext] ?? "audio/mpeg";
   const buffer = await fs.readFile(filePath);
   const base64 = buffer.toString("base64");
-  const dataUrl = `data:${mimeType};base64,${base64}`;
-
-  const sizeWarning = buffer.length > SIZE_WARNING_THRESHOLD
-    ? `Warning: ${path.basename(filePath)} is ${(buffer.length / 1024 / 1024).toFixed(1)}MB - large files may load slowly`
-    : undefined;
-
-  return { dataUrl, sizeWarning };
+  return `data:${mimeType};base64,${base64}`;
 }
 
+// Schema for track input (from agent)
 const trackInputSchema = z.object({
   filePath: z.string().describe("Absolute path to the audio file"),
   title: z.string().describe("Display title for the track"),
   artist: z.string().optional().describe("Optional artist name"),
 });
 
-const trackOutputSchema = z.object({
+// Schema for track metadata output (no audio data - lazy loaded)
+const trackMetadataSchema = z.object({
   id: z.string(),
-  src: z.string(),
+  filePath: z.string(),
   title: z.string(),
   artist: z.string().optional(),
 });
 
 const playAudioOutputSchema = z.object({
-  tracks: z.array(trackOutputSchema),
-  warnings: z.array(z.string()).optional(),
+  tracks: z.array(trackMetadataSchema),
+});
+
+// Schema for load_audio tool (lazy loading)
+const loadAudioInputSchema = z.object({
+  filePath: z.string().describe("Absolute path to the audio file to load"),
+});
+
+const loadAudioOutputSchema = z.object({
+  dataUrl: z.string().describe("Base64 data URL of the audio file"),
 });
 
 /**
@@ -70,31 +67,29 @@ function createServer(): McpServer {
     tracks: z.array(trackInputSchema).describe("Array of tracks to add to the queue"),
   });
 
-  // Register the play_audio tool
+  // Register the play_audio tool - returns metadata only, audio is lazy loaded
   registerAppTool(server,
     "play_audio",
     {
       title: "Play Audio",
-      description: "Adds one or more audio tracks to the ElevenLabs Player queue. Each track requires a filePath and title.",
+      description: "Adds one or more audio tracks to the ElevenLabs Player queue. Each track requires a filePath and title. Audio data is loaded on-demand when playback starts.",
       inputSchema: playAudioInputSchema,
       outputSchema: playAudioOutputSchema,
       _meta: { ui: { resourceUri } },
     },
     async ({ tracks }: z.infer<typeof playAudioInputSchema>): Promise<CallToolResult> => {
       const validatedTracks = [];
-      const warnings: string[] = [];
       const batchId = Date.now();
 
       for (let i = 0; i < tracks.length; i++) {
         const track = tracks[i];
         const absolutePath = path.resolve(track.filePath);
         try {
+          // Just verify the file exists, don't read it yet
           await fs.access(absolutePath);
-          const { dataUrl, sizeWarning } = await readAudioAsDataUrl(absolutePath);
-          if (sizeWarning) warnings.push(sizeWarning);
           validatedTracks.push({
             id: `${batchId}-${i}`,
-            src: dataUrl,
+            filePath: absolutePath,
             title: track.title,
             artist: track.artist,
           });
@@ -106,19 +101,41 @@ function createServer(): McpServer {
         }
       }
 
-      // Build structured content for type-safe access
-      const structuredContent = {
-        tracks: validatedTracks,
-        ...(warnings.length > 0 && { warnings }),
-      };
-
-      // Also provide text content for display/fallback
-      const textSummary = `Added ${validatedTracks.length} track(s)${warnings.length > 0 ? `\n${warnings.join("\n")}` : ""}`;
+      const structuredContent = { tracks: validatedTracks };
+      const textSummary = `Added ${validatedTracks.length} track(s) to queue`;
 
       return {
         content: [{ type: "text", text: textSummary }],
         structuredContent,
       };
+    },
+  );
+
+  // Register the load_audio tool - lazy loads audio data for a single file
+  registerAppTool(server,
+    "load_audio",
+    {
+      title: "Load Audio",
+      description: "Loads audio data for a single file. Called by the player UI when playback starts.",
+      inputSchema: loadAudioInputSchema,
+      outputSchema: loadAudioOutputSchema,
+      _meta: { ui: { resourceUri } },
+    },
+    async ({ filePath }: z.infer<typeof loadAudioInputSchema>): Promise<CallToolResult> => {
+      const absolutePath = path.resolve(filePath);
+      try {
+        await fs.access(absolutePath);
+        const dataUrl = await readAudioAsDataUrl(absolutePath);
+        return {
+          content: [{ type: "text", text: "Audio loaded" }],
+          structuredContent: { dataUrl },
+        };
+      } catch {
+        return {
+          isError: true,
+          content: [{ type: "text", text: `File not found: ${absolutePath}` }],
+        };
+      }
     },
   );
 
