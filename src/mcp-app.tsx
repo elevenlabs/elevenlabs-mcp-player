@@ -464,7 +464,7 @@ function AudioPlayerContent({ app, tracks, setTracks }: AudioPlayerContentProps)
 
 function ElevenLabsPlayerAppInner({ app, tracks, setTracks }: ElevenLabsPlayerAppInnerProps) {
   return (
-    <main className="w-full p-3">
+    <main className="w-full">
       <AudioPlayerProvider>
         <AudioPlayerContent app={app} tracks={tracks} setTracks={setTracks} />
       </AudioPlayerProvider>
