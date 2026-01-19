@@ -75,6 +75,7 @@ function createServer(): McpServer {
       description: "Adds one or more audio tracks to the ElevenLabs Player queue. Each track requires a filePath and title. Audio data is loaded on-demand when playback starts.",
       inputSchema: playAudioInputSchema,
       outputSchema: playAudioOutputSchema,
+      annotations: { readOnlyHint: true, idempotentHint: true },
       _meta: { ui: { resourceUri } },
     },
     async ({ tracks }: z.infer<typeof playAudioInputSchema>): Promise<CallToolResult> => {
@@ -119,6 +120,7 @@ function createServer(): McpServer {
       description: "Loads audio data for a single file. Called by the player UI when playback starts.",
       inputSchema: loadAudioInputSchema,
       outputSchema: loadAudioOutputSchema,
+      annotations: { readOnlyHint: true, idempotentHint: true },
       _meta: { ui: { resourceUri } },
     },
     async ({ filePath }: z.infer<typeof loadAudioInputSchema>): Promise<CallToolResult> => {
