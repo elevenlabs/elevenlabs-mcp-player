@@ -1,12 +1,19 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult, ReadResourceResult } from "@modelcontextprotocol/sdk/types.js";
+#!/usr/bin/env node
+
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { registerAppTool, registerAppResource, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
-import { startServer } from "./src/server-utils.js";
-import { z } from "zod";
 
-const DIST_DIR = path.join(import.meta.dirname, "dist");
+const DIST_DIR = import.meta.dirname.endsWith("dist")
+  ? import.meta.dirname
+  : path.join(import.meta.dirname, "dist");
 
 const MIME_TYPES: Record<string, string> = {
   ".mp3": "audio/mpeg",
@@ -16,6 +23,10 @@ const MIME_TYPES: Record<string, string> = {
   ".aac": "audio/aac",
 };
 
+// MCP App resource MIME type
+const RESOURCE_MIME_TYPE = "text/html;profile=mcp-app";
+const RESOURCE_URI = "ui://elevenlabs-player/mcp-app.html";
+
 async function readAudioAsDataUrl(filePath: string): Promise<string> {
   const ext = path.extname(filePath).toLowerCase();
   const mimeType = MIME_TYPES[ext] ?? "audio/mpeg";
@@ -24,140 +35,153 @@ async function readAudioAsDataUrl(filePath: string): Promise<string> {
   return `data:${mimeType};base64,${base64}`;
 }
 
-// Schema for track input (from agent)
-const trackInputSchema = z.object({
-  filePath: z.string().describe("Absolute path to the audio file"),
-  title: z.string().describe("Display title for the track"),
-  artist: z.string().optional().describe("Optional artist name"),
-});
-
-// Schema for track metadata output (no audio data - lazy loaded)
-const trackMetadataSchema = z.object({
-  id: z.string(),
-  filePath: z.string(),
-  title: z.string(),
-  artist: z.string().optional(),
-});
-
-const playAudioOutputSchema = z.object({
-  tracks: z.array(trackMetadataSchema),
-});
-
-// Schema for load_audio tool (lazy loading)
-const loadAudioInputSchema = z.object({
-  filePath: z.string().describe("Absolute path to the audio file to load"),
-});
-
-const loadAudioOutputSchema = z.object({
-  dataUrl: z.string().describe("Base64 data URL of the audio file"),
-});
-
-/**
- * Creates a new MCP server instance with tools and resources registered.
- */
-function createServer(): McpServer {
-  const server = new McpServer({
+const server = new Server(
+  {
     name: "ElevenLabs Player",
     version: "1.0.0",
-  });
-
-  const resourceUri = "ui://elevenlabs-player/mcp-app.html";
-
-  const playAudioInputSchema = z.object({
-    tracks: z.array(trackInputSchema).describe("Array of tracks to add to the queue"),
-  });
-
-  // Register the play_audio tool - returns metadata only, audio is lazy loaded
-  registerAppTool(server,
-    "play_audio",
-    {
-      title: "Play Audio",
-      description: "Adds one or more audio tracks to the ElevenLabs Player queue. Each track requires a filePath and title. Audio data is loaded on-demand when playback starts.",
-      inputSchema: playAudioInputSchema,
-      outputSchema: playAudioOutputSchema,
-      annotations: { readOnlyHint: true, idempotentHint: true },
-      _meta: { ui: { resourceUri } },
+  },
+  {
+    capabilities: {
+      tools: {},
+      resources: {},
     },
-    async ({ tracks }: z.infer<typeof playAudioInputSchema>): Promise<CallToolResult> => {
-      const validatedTracks = [];
-      const batchId = Date.now();
+  }
+);
 
-      for (let i = 0; i < tracks.length; i++) {
-        const track = tracks[i];
-        const absolutePath = path.resolve(track.filePath);
-        try {
-          // Just verify the file exists, don't read it yet
-          await fs.access(absolutePath);
-          validatedTracks.push({
-            id: `${batchId}-${i}`,
-            filePath: absolutePath,
-            title: track.title,
-            artist: track.artist,
-          });
-        } catch {
-          return {
-            isError: true,
-            content: [{ type: "text", text: `File not found: ${absolutePath}` }],
-          };
-        }
-      }
+// List available tools with UI metadata
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return {
+    tools: [
+      {
+        name: "play_audio",
+        description: "Adds one or more audio tracks to the ElevenLabs Player queue. Each track requires a filePath and title. Audio data is loaded on-demand when playback starts.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            tracks: {
+              type: "array",
+              description: "Array of tracks to add to the queue",
+              items: {
+                type: "object",
+                properties: {
+                  filePath: { type: "string", description: "Absolute path to the audio file" },
+                  title: { type: "string", description: "Display title for the track" },
+                  artist: { type: "string", description: "Optional artist name" },
+                },
+                required: ["filePath", "title"],
+              },
+            },
+          },
+          required: ["tracks"],
+        },
+        // UI metadata - tells Claude to display the resource
+        _meta: {
+          ui: { resourceUri: RESOURCE_URI },
+        },
+      },
+      {
+        name: "load_audio",
+        description: "Loads audio data for a single file. Called by the player UI when playback starts.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            filePath: { type: "string", description: "Absolute path to the audio file to load" },
+          },
+          required: ["filePath"],
+        },
+        _meta: {
+          ui: { resourceUri: RESOURCE_URI },
+        },
+      },
+    ],
+  };
+});
 
-      const structuredContent = { tracks: validatedTracks };
-      const textSummary = `Added ${validatedTracks.length} track(s) to queue`;
+// Handle tool calls
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
 
-      return {
-        content: [{ type: "text", text: textSummary }],
-        structuredContent,
-      };
-    },
-  );
+  if (name === "play_audio") {
+    const { tracks } = args as { tracks: Array<{ filePath: string; title: string; artist?: string }> };
+    const validatedTracks = [];
+    const batchId = Date.now();
 
-  // Register the load_audio tool - lazy loads audio data for a single file
-  registerAppTool(server,
-    "load_audio",
-    {
-      title: "Load Audio",
-      description: "Loads audio data for a single file. Called by the player UI when playback starts.",
-      inputSchema: loadAudioInputSchema,
-      outputSchema: loadAudioOutputSchema,
-      annotations: { readOnlyHint: true, idempotentHint: true },
-      _meta: { ui: { resourceUri } },
-    },
-    async ({ filePath }: z.infer<typeof loadAudioInputSchema>): Promise<CallToolResult> => {
-      const absolutePath = path.resolve(filePath);
+    for (let i = 0; i < tracks.length; i++) {
+      const track = tracks[i];
+      const absolutePath = path.resolve(track.filePath);
       try {
         await fs.access(absolutePath);
-        const dataUrl = await readAudioAsDataUrl(absolutePath);
-        return {
-          content: [{ type: "text", text: "Audio loaded" }],
-          structuredContent: { dataUrl },
-        };
+        validatedTracks.push({
+          id: `${batchId}-${i}`,
+          filePath: absolutePath,
+          title: track.title,
+          artist: track.artist,
+        });
       } catch {
         return {
           isError: true,
-          content: [{ type: "text", text: `File not found: ${absolutePath}` }],
+          content: [{ type: "text" as const, text: `File not found: ${absolutePath}` }],
         };
       }
-    },
-  );
+    }
 
-  // Register the resource, which returns the bundled HTML/JavaScript for the UI.
-  registerAppResource(server,
-    resourceUri,
-    resourceUri,
-    { mimeType: RESOURCE_MIME_TYPE },
-    async (): Promise<ReadResourceResult> => {
-      const html = await fs.readFile(path.join(DIST_DIR, "mcp-app.html"), "utf-8");
+    return {
+      content: [{ type: "text" as const, text: `Added ${validatedTracks.length} track(s) to queue` }],
+      structuredContent: { tracks: validatedTracks },
+    };
+  }
 
+  if (name === "load_audio") {
+    const { filePath } = args as { filePath: string };
+    const absolutePath = path.resolve(filePath);
+    try {
+      await fs.access(absolutePath);
+      const dataUrl = await readAudioAsDataUrl(absolutePath);
       return {
-        contents: [
-          { uri: resourceUri, mimeType: RESOURCE_MIME_TYPE, text: html },
-        ],
+        content: [{ type: "text" as const, text: "Audio loaded" }],
+        structuredContent: { dataUrl },
       };
-    },
-  );
+    } catch {
+      return {
+        isError: true,
+        content: [{ type: "text" as const, text: `File not found: ${absolutePath}` }],
+      };
+    }
+  }
 
-  return server;
-}
+  throw new Error(`Unknown tool: ${name}`);
+});
 
-startServer(createServer);
+// List resources (the UI HTML)
+server.setRequestHandler(ListResourcesRequestSchema, async () => {
+  return {
+    resources: [
+      {
+        uri: RESOURCE_URI,
+        name: "ElevenLabs Player UI",
+        mimeType: RESOURCE_MIME_TYPE,
+      },
+    ],
+  };
+});
+
+// Read resource content
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  const { uri } = request.params;
+
+  if (uri === RESOURCE_URI) {
+    const html = await fs.readFile(path.join(DIST_DIR, "mcp-app.html"), "utf-8");
+    return {
+      contents: [
+        { uri, mimeType: RESOURCE_MIME_TYPE, text: html },
+      ],
+    };
+  }
+
+  throw new Error(`Unknown resource: ${uri}`);
+});
+
+// Start the server
+const transport = new StdioServerTransport();
+await server.connect(transport);
+console.error("[ElevenLabs Player] Server running");

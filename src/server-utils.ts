@@ -172,12 +172,18 @@ export async function startStreamableHttpServer(
     }
   });
 
-  const { promise, resolve, reject } = Promise.withResolvers<void>();
+  // Compatible with Node.js 20 (Promise.withResolvers requires Node 22+)
+  let resolve: () => void;
+  let reject: (err: Error) => void;
+  const promise = new Promise<void>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
 
   const httpServer = expressApp.listen(port, (err?: Error) => {
-    if (err) return reject(err);
+    if (err) return reject!(err);
     console.log(`Server listening on http://localhost:${port}/mcp`);
-    resolve();
+    resolve!();
   });
 
   const shutdown = () => {

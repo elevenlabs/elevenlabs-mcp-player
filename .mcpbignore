@@ -1,0 +1,51 @@
+# Source files (only need compiled output)
+*.ts
+!*.d.ts
+src/
+# Exclude root mcp-app.html (source), but NOT dist/mcp-app.html (bundled)
+/mcp-app.html
+
+# Development files
+.git/
+.gitignore
+.mcpbignore
+*.md
+tsconfig.json
+tsconfig.build.json
+vite.config.ts
+components.json
+package-lock.json
+
+# Exclude deeply nested/recursive node_modules (from github deps)
+node_modules/@modelcontextprotocol/ext-apps/node_modules/
+node_modules/@modelcontextprotocol/ext-apps/examples/
+
+# Exclude dev-only packages from node_modules
+node_modules/@types/
+node_modules/typescript/
+node_modules/esbuild/
+node_modules/vite/
+node_modules/@vitejs/
+node_modules/tsx/
+node_modules/concurrently/
+node_modules/cross-env/
+node_modules/tailwindcss/
+node_modules/@tailwindcss/
+node_modules/vite-plugin-singlefile/
+
+# UI deps (bundled into mcp-app.html, not needed at runtime)
+node_modules/react/
+node_modules/react-dom/
+node_modules/@radix-ui/
+node_modules/lucide-react/
+node_modules/class-variance-authority/
+node_modules/clsx/
+node_modules/tailwind-merge/
+node_modules/tw-animate-css/
+
+# Temporary/cache files
+.vite/
+*.log
+
+# Old build artifacts
+dist/server.cjs

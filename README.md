@@ -7,12 +7,11 @@
 
 </div>
 
-
 <p align="center">
-  Audio Player <a href="https://github.com/modelcontextprotocol/ext-apps">Model Context Protocol (MCP) app</a> that plays any audio file from within your MCP client.      
+  Audio Player <a href="https://github.com/modelcontextprotocol/mcpb">MCP Bundle</a> for Claude Desktop that plays any audio file with a built-in player UI.
 </p>
 
-<p align="center">  
+<p align="center">
   <img src="https://github.com/user-attachments/assets/3ab700ed-5e1c-4e21-b969-56696c3b52dd" />
 </p>
 
@@ -21,9 +20,47 @@
 - Exposes a `play_audio` tool that accepts one or more audio tracks
 - Renders an audio player UI with playback controls, progress bar, and speed adjustment
 - Supports queueing multiple tracks with a playlist view
-- Streams local audio files through an HTTP endpoint
+- Loads audio files on-demand for efficient playback
 
-## Tool Input
+## Installation
+
+### Build the MCPB Bundle
+
+```bash
+# Clone the repository
+git clone https://github.com/elevenlabs/elevenlabs-mcp-player.git
+cd elevenlabs-mcp-player
+
+# Install dependencies
+npm install
+
+# Build and pack the bundle
+npm run pack
+```
+
+This creates `elevenlabs-player.mcpb` in the project root.
+
+### Install in Claude Desktop
+
+Open the bundle with Claude Desktop:
+
+```bash
+open elevenlabs-player.mcpb
+```
+
+Or double-click the `.mcpb` file in Finder.
+
+## Usage
+
+Once installed, ask Claude to play audio files:
+
+> "Play the audio file at /Users/me/Music/song.mp3"
+
+Or provide multiple tracks:
+
+> "Play these audio files: /path/to/track1.mp3 and /path/to/track2.mp3"
+
+### Tool Input
 
 The `play_audio` tool accepts an array of tracks:
 
@@ -39,41 +76,66 @@ The `play_audio` tool accepts an array of tracks:
 }
 ```
 
-- `filePath` (required): Absolute path to the audio file
-- `title` (required): Display title
-- `artist` (optional): Artist name
+| Field | Required | Description |
+|-------|----------|-------------|
+| `filePath` | Yes | Absolute path to the audio file |
+| `title` | Yes | Display title for the track |
+| `artist` | No | Artist name |
 
-## Requirements
+### Supported Formats
 
-- Bun
+- MP3 (`.mp3`)
+- WAV (`.wav`)
+- OGG (`.ogg`)
+- M4A (`.m4a`)
+- AAC (`.aac`)
 
-## Running Locally
+## Development
 
-Install dependencies:
+### Requirements
 
-```bash
-bun install
-```
+- Node.js 20+
+- npm
 
-Start the development server:
+### Testing Locally
 
-```bash
-bun run dev
-```
-
-This runs both the Vite build watcher and the MCP server on `http://localhost:3001/mcp`.
-
-## Building
-
-Build for production:
+Use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) to test the server without Claude Desktop:
 
 ```bash
-bun run build
+# Install dependencies
+npm install
+
+# Build and run with MCP Inspector
+npm run dev
 ```
 
-## Project Structure
+This opens a browser UI at `http://localhost:6274` where you can:
+- View available tools (`play_audio`, `load_audio`)
+- Test tool calls with sample inputs
+- Inspect responses and debug issues
 
-- `server.ts` - MCP server with tool and resource registration
-- `src/mcp-app.tsx` - React app with audio player UI
-- `src/server-utils.ts` - HTTP server utilities including audio file streaming
-- `src/components/ui/audio-player.tsx` - Audio player components
+### Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Build and test with MCP Inspector |
+| `npm run build` | Build UI and server |
+| `npm run pack` | Create MCPB bundle |
+
+### Project Structure
+
+```
+├── manifest.json          # MCPB bundle manifest
+├── server.ts              # MCP server with tool registration
+├── src/
+│   ├── mcp-app.tsx        # React audio player UI
+│   └── components/ui/     # UI components
+├── dist/
+│   ├── server.js          # Compiled server
+│   └── mcp-app.html       # Bundled UI
+└── .mcpbignore            # Files to exclude from bundle
+```
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.

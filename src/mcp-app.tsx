@@ -444,7 +444,7 @@ function AudioPlayerContent({ app, tracks, setTracks }: AudioPlayerContentProps)
 
   return (
     <TrackLoaderContext.Provider value={trackLoaderValue}>
-      <div className="flex flex-col border rounded-lg overflow-hidden bg-background">
+      <div className="flex flex-col overflow-hidden bg-background">
         <Player tracks={tracks} repeatMode={repeatMode} onRepeatToggle={cycleRepeatMode} />
         {tracks.length > 1 && (
           <div className="bg-muted/50 border-t">

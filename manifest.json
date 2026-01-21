@@ -1,0 +1,34 @@
+{
+  "manifest_version": "0.3",
+  "name": "elevenlabs-player",
+  "version": "1.0.0",
+  "description": "Audio Player MCP app that plays any audio file from within your MCP client. Supports queueing multiple tracks with playlist view, playback controls, progress bar, and speed adjustment.",
+  "author": {
+    "name": "ElevenLabs",
+    "url": "https://github.com/elevenlabs"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elevenlabs/elevenlabs-mcp-player"
+  },
+  "server": {
+    "type": "node",
+    "entry_point": "dist/server.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/server.js"]
+    }
+  },
+  "tools": [
+    {
+      "name": "play_audio",
+      "description": "Adds one or more audio tracks to the ElevenLabs Player queue. Each track requires a filePath and title. Audio data is loaded on-demand when playback starts."
+    },
+    {
+      "name": "load_audio",
+      "description": "Loads audio data for a single file. Called by the player UI when playback starts."
+    }
+  ],
+  "keywords": ["mcp", "audio", "player", "elevenlabs"]
+}
