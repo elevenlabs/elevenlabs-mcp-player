@@ -136,6 +136,12 @@ This opens a browser UI at `http://localhost:6274` where you can:
 └── .mcpbignore            # Files to exclude from bundle
 ```
 
+## Privacy
+
+This extension runs entirely locally on your machine. Audio files are read from your local filesystem and are not transmitted to any external servers. No data is collected or shared.
+
+For more information about ElevenLabs' data practices, see the [ElevenLabs Privacy Policy](https://elevenlabs.io/privacy-policy).
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.

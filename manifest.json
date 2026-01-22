@@ -8,6 +8,7 @@
     "url": "https://github.com/elevenlabs"
   },
   "license": "MIT",
+  "icon": "icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/elevenlabs/elevenlabs-mcp-player"

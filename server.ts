@@ -54,6 +54,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: "play_audio",
+        title: "Play Audio",
         description: "Adds one or more audio tracks to the ElevenLabs Player queue. Each track requires a filePath and title. Audio data is loaded on-demand when playback starts.",
         inputSchema: {
           type: "object",
@@ -74,6 +75,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["tracks"],
         },
+        annotations: {
+          title: "Play Audio",
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
         // UI metadata - tells Claude to display the resource
         _meta: {
           ui: { resourceUri: RESOURCE_URI },
@@ -81,6 +89,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "load_audio",
+        title: "Load Audio",
         description: "Loads audio data for a single file. Called by the player UI when playback starts.",
         inputSchema: {
           type: "object",
@@ -88,6 +97,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             filePath: { type: "string", description: "Absolute path to the audio file to load" },
           },
           required: ["filePath"],
+        },
+        annotations: {
+          title: "Load Audio",
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
         },
         _meta: {
           ui: { resourceUri: RESOURCE_URI },
