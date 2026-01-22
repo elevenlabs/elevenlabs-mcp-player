@@ -8,19 +8,21 @@
 </div>
 
 <p align="center">
-  Audio Player <a href="https://github.com/modelcontextprotocol/mcpb">MCP Bundle</a> for Claude Desktop that plays any audio file with a built-in player UI.
+  Audio Player <a href="https://github.com/modelcontextprotocol/mcpb">MCP Bundle</a> for Claude Desktop with ElevenLabs integration. Generate speech, sound effects, and music, or play any local audio file.
 </p>
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/3ab700ed-5e1c-4e21-b969-56696c3b52dd" />
 </p>
 
-## What it does
+## Features
 
-- Exposes a `play_audio` tool that accepts one or more audio tracks
-- Renders an audio player UI with playback controls, progress bar, and speed adjustment
-- Supports queueing multiple tracks with a playlist view
-- Loads audio files on-demand for efficient playback
+- **Text-to-Speech** - Generate speech from text using ElevenLabs voices
+- **Sound Effects** - Create sound effects from text descriptions
+- **Music Generation** - Compose music from prompts
+- **Audio Playback** - Play any local audio file with a built-in player UI
+- **Playlist Support** - Queue multiple tracks with playlist view
+- **Playback Controls** - Progress bar, speed adjustment, and standard controls
 
 ## Installation
 
@@ -50,39 +52,91 @@ open elevenlabs-player.mcpb
 
 Or double-click the `.mcpb` file in Finder.
 
+## Configuration
+
+To use the ElevenLabs generation features (TTS, sound effects, music), configure your API key in Claude Desktop:
+
+1. Open Claude Desktop settings
+2. Navigate to the ElevenLabs Player extension settings
+3. Enter your `ELEVENLABS_API_KEY`
+
+| Environment Variable | Description | Default |
+|---------------------|-------------|---------|
+| `ELEVENLABS_API_KEY` | Your ElevenLabs API key (required for generation) | - |
+| `ELEVENLABS_OUTPUT_DIR` | Directory to save generated audio | Desktop |
+
 ## Usage
 
-Once installed, ask Claude to play audio files:
+### Generate Speech
+
+> "Say 'Hello, world!' using ElevenLabs"
+
+> "Generate speech for this text: Welcome to the future of AI"
+
+### Generate Sound Effects
+
+> "Create a sound effect of thunder and rain"
+
+> "Generate the sound of a spaceship taking off"
+
+### Generate Music
+
+> "Compose a calm piano melody for relaxation"
+
+> "Generate upbeat electronic music for a workout"
+
+### Play Local Audio
 
 > "Play the audio file at /Users/me/Music/song.mp3"
 
-Or provide multiple tracks:
-
 > "Play these audio files: /path/to/track1.mp3 and /path/to/track2.mp3"
 
-### Tool Input
+## Tools
 
-The `play_audio` tool accepts an array of tracks:
+### `generate_tts`
 
-```json
-{
-  "tracks": [
-    {
-      "filePath": "/absolute/path/to/audio.mp3",
-      "title": "Track Title",
-      "artist": "Artist Name"
-    }
-  ]
-}
-```
+Generates speech from text using ElevenLabs text-to-speech.
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `filePath` | Yes | Absolute path to the audio file |
-| `title` | Yes | Display title for the track |
-| `artist` | No | Artist name |
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `text` | Yes | The text to convert to speech |
+| `voice_id` | No | ElevenLabs voice ID (default: Juniper) |
+| `model_id` | No | Model ID (default: eleven_v3) |
+| `title` | No | Display title for the track |
 
-### Supported Formats
+### `generate_sound_effect`
+
+Generates a sound effect from a text description.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `prompt` | Yes | Description of the sound effect |
+| `duration_seconds` | No | Duration in seconds |
+| `title` | No | Display title for the track |
+
+### `generate_music`
+
+Generates music from a text prompt.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `prompt` | Yes | Description of the music (genre, mood, instruments) |
+| `duration_seconds` | No | Duration in seconds |
+| `instrumental` | No | Force instrumental only (no vocals) |
+| `title` | No | Display title for the track |
+
+### `play_audio`
+
+Plays one or more local audio files.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `tracks` | Yes | Array of track objects |
+| `tracks[].filePath` | Yes | Absolute path to the audio file |
+| `tracks[].title` | Yes | Display title |
+| `tracks[].artist` | No | Artist name |
+
+### Supported Audio Formats
 
 - MP3 (`.mp3`)
 - WAV (`.wav`)
@@ -110,7 +164,7 @@ npm run dev
 ```
 
 This opens a browser UI at `http://localhost:6274` where you can:
-- View available tools (`play_audio`, `load_audio`)
+- View available tools
 - Test tool calls with sample inputs
 - Inspect responses and debug issues
 
@@ -138,7 +192,9 @@ This opens a browser UI at `http://localhost:6274` where you can:
 
 ## Privacy
 
-This extension runs entirely locally on your machine. Audio files are read from your local filesystem and are not transmitted to any external servers. No data is collected or shared.
+This extension runs locally on your machine. Local audio files are read from your filesystem and are not transmitted externally.
+
+When using ElevenLabs generation features (TTS, sound effects, music), your text prompts are sent to the ElevenLabs API. Generated audio is saved locally to your configured output directory.
 
 For more information about ElevenLabs' data practices, see the [ElevenLabs Privacy Policy](https://elevenlabs.io/privacy-policy).
 

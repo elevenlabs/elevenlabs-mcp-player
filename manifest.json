@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "elevenlabs-player",
   "version": "1.0.0",
-  "description": "Audio Player MCP app that plays any audio file from within your MCP client. Supports queueing multiple tracks with playlist view, playback controls, progress bar, and speed adjustment.",
+  "description": "Audio Player MCP Bundle with ElevenLabs integration. Generate speech, sound effects, and music using the ElevenLabs API, or play any local audio file. Features playlist view, playback controls, progress bar, and speed adjustment.",
   "author": {
     "name": "ElevenLabs",
     "url": "https://github.com/elevenlabs"
@@ -18,18 +18,48 @@
     "entry_point": "dist/server.js",
     "mcp_config": {
       "command": "node",
-      "args": ["${__dirname}/dist/server.js"]
+      "args": ["${__dirname}/dist/server.js"],
+      "env": {
+        "ELEVENLABS_API_KEY": "${user_config.api_key}",
+        "ELEVENLABS_OUTPUT_DIR": "${user_config.output_dir}"
+      }
+    }
+  },
+  "user_config": {
+    "api_key": {
+      "type": "string",
+      "title": "ElevenLabs API Key",
+      "description": "Your ElevenLabs API key from https://elevenlabs.io/app/settings/api-keys",
+      "required": true
+    },
+    "output_dir": {
+      "type": "string",
+      "title": "Output Directory",
+      "description": "Directory to save generated audio files (defaults to Desktop)",
+      "required": false
     }
   },
   "tools": [
     {
       "name": "play_audio",
-      "description": "Adds one or more audio tracks to the ElevenLabs Player queue. Each track requires a filePath and title. Audio data is loaded on-demand when playback starts."
+      "description": "Plays existing local audio files. Only for files on disk - not needed after generate tools."
     },
     {
       "name": "load_audio",
-      "description": "Loads audio data for a single file. Called by the player UI when playback starts."
+      "description": "Loads audio data for playback. Called internally by the player UI."
+    },
+    {
+      "name": "generate_tts",
+      "description": "Generates speech from text. Shows player automatically."
+    },
+    {
+      "name": "generate_sound_effect",
+      "description": "Generates sound effects from prompts. Shows player automatically."
+    },
+    {
+      "name": "generate_music",
+      "description": "Generates music from prompts. Shows player automatically."
     }
   ],
-  "keywords": ["mcp", "audio", "player", "elevenlabs"]
+  "keywords": ["mcp", "audio", "player", "elevenlabs", "tts", "text-to-speech", "sound-effects", "music"]
 }

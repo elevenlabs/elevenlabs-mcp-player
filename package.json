@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "dist/server.js",
   "type": "module",
-  "description": "Audio Player MCP app that plays any audio file from within your MCP client",
+  "description": "Audio Player MCP Bundle with ElevenLabs integration for TTS, sound effects, and music generation",
   "author": "ElevenLabs",
   "scripts": {
     "build:ui": "cross-env INPUT=mcp-app.html vite build",
@@ -17,11 +17,17 @@
     "mcp",
     "audio",
     "player",
-    "elevenlabs"
+    "elevenlabs",
+    "tts",
+    "text-to-speech",
+    "sound-effects",
+    "music"
   ],
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.25.2"
+    "@elevenlabs/elevenlabs-js": "^2.32.0",
+    "@modelcontextprotocol/sdk": "^1.25.2",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@modelcontextprotocol/ext-apps": "github:modelcontextprotocol/ext-apps",
