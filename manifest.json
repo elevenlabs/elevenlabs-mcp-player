@@ -3,6 +3,9 @@
   "name": "elevenlabs-player",
   "version": "1.0.0",
   "description": "Audio Player MCP Bundle with ElevenLabs integration. Generate speech, sound effects, and music using the ElevenLabs API, or play any local audio file. Features playlist view, playback controls, progress bar, and speed adjustment.",
+  "display_name": "ElevenLabs Player",
+  "privacy_policies": ["https://elevenlabs.io/privacy-policy"],
+  "support": "https://github.com/elevenlabs/elevenlabs-mcp-player/issues",
   "author": {
     "name": "ElevenLabs",
     "url": "https://github.com/elevenlabs"
