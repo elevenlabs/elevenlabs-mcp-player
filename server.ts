@@ -186,6 +186,7 @@ server.registerTool(
       voice_id: z.string().optional().describe("ElevenLabs voice ID (default: Juniper)"),
       model_id: z.string().optional().describe("Model ID (default: eleven_v3)"),
       title: z.string().optional().describe("Display title for the track"),
+      filename: z.string().optional().describe("Optional output filename for the generated audio"),
     },
     annotations: {
       title: "Generate Speech",
@@ -196,7 +197,7 @@ server.registerTool(
     },
     _meta: { ui: { resourceUri: RESOURCE_URI } },
   },
-  async ({ text, voice_id, model_id, title }) => {
+  async ({ text, voice_id, model_id, title, filename }) => {
     try {
       const client = getClient();
       const response = await client.textToSpeech.convert(voice_id || DEFAULT_VOICE_ID, {
@@ -206,8 +207,10 @@ server.registerTool(
 
       const outputDir = getOutputDir();
       await fs.mkdir(outputDir, { recursive: true });
-      const filename = generateFilename("tts", ".mp3");
-      const filePath = path.join(outputDir, filename);
+      const requestedFilename = filename
+            ? filename.endsWith(".mp3") ? filename : `${filename}.mp3`
+            : generateFilename("tts", ".mp3");
+      const filePath = path.join(outputDir, requestedFilename);
 
       await saveStreamToFile(response, filePath);
 
