@@ -24,6 +24,39 @@ const MIME_TYPES: Record<string, string> = {
 const RESOURCE_MIME_TYPE = "text/html;profile=mcp-app";
 const RESOURCE_URI = "ui://elevenlabs-player/mcp-app.html";
 
+// Include the legacy key for hosts that do not support nested UI metadata.
+const UI_META = {
+  ui: { resourceUri: RESOURCE_URI },
+  "ui/resourceUri": RESOURCE_URI,
+};
+
+const trackSchema = z.object({
+  id: z.string().describe("Stable identifier for the track within the queue"),
+  filePath: z.string().describe("Absolute path to the audio file on disk"),
+  title: z.string().describe("Display title for the track"),
+  artist: z.string().optional().describe("Optional artist name"),
+});
+
+const tracksOutputSchema = {
+  tracks: z.array(trackSchema).describe("Tracks to render in the player queue"),
+};
+
+const loadAudioOutputSchema = {
+  dataUrl: z.string().describe("Base64 data URL containing the audio bytes"),
+};
+
+type TrackPayload = z.infer<typeof trackSchema>;
+
+function trackQueueResult(summary: string, tracks: TrackPayload[]) {
+  return {
+    content: [
+      { type: "text" as const, text: summary },
+      { type: "text" as const, text: JSON.stringify({ tracks }) },
+    ],
+    structuredContent: { tracks },
+  };
+}
+
 // Default voice and model settings
 const DEFAULT_VOICE_ID = "aMSt68OGf4xUZAnLpTU8"; // Juniper
 const DEFAULT_MODEL_ID = "eleven_v3";
@@ -100,6 +133,7 @@ server.registerTool(
         artist: z.string().optional().describe("Optional artist name"),
       })).describe("Array of tracks to add to the queue"),
     },
+    outputSchema: tracksOutputSchema,
     annotations: {
       title: "Play Audio",
       readOnlyHint: true,
@@ -107,10 +141,10 @@ server.registerTool(
       idempotentHint: true,
       openWorldHint: false,
     },
-    _meta: { ui: { resourceUri: RESOURCE_URI } },
+    _meta: UI_META,
   },
   async ({ tracks }) => {
-    const validatedTracks = [];
+    const validatedTracks: TrackPayload[] = [];
     const batchId = Date.now();
 
     for (let i = 0; i < tracks.length; i++) {
@@ -132,10 +166,10 @@ server.registerTool(
       }
     }
 
-    return {
-      content: [{ type: "text" as const, text: `Added ${validatedTracks.length} track(s) to queue` }],
-      structuredContent: { tracks: validatedTracks },
-    };
+    return trackQueueResult(
+      `Added ${validatedTracks.length} track(s) to queue`,
+      validatedTracks,
+    );
   }
 );
 
@@ -148,6 +182,7 @@ server.registerTool(
     inputSchema: {
       filePath: z.string().describe("Absolute path to the audio file to load"),
     },
+    outputSchema: loadAudioOutputSchema,
     annotations: {
       title: "Load Audio",
       readOnlyHint: true,
@@ -155,13 +190,14 @@ server.registerTool(
       idempotentHint: true,
       openWorldHint: false,
     },
-    _meta: { ui: { resourceUri: RESOURCE_URI } },
+    _meta: UI_META,
   },
   async ({ filePath }) => {
     const absolutePath = path.resolve(filePath);
     try {
       await fs.access(absolutePath);
       const dataUrl = await readAudioAsDataUrl(absolutePath);
+      // Do not duplicate base64 audio in text content.
       return {
         content: [{ type: "text" as const, text: "Audio loaded" }],
         structuredContent: { dataUrl },
@@ -188,6 +224,7 @@ server.registerTool(
       title: z.string().optional().describe("Display title for the track"),
       filename: z.string().optional().describe("Optional output filename for the generated audio"),
     },
+    outputSchema: tracksOutputSchema,
     annotations: {
       title: "Generate Speech",
       readOnlyHint: false,
@@ -195,7 +232,7 @@ server.registerTool(
       idempotentHint: false,
       openWorldHint: true,
     },
-    _meta: { ui: { resourceUri: RESOURCE_URI } },
+    _meta: UI_META,
   },
   async ({ text, voice_id, model_id, title, filename }) => {
     try {
@@ -217,17 +254,12 @@ server.registerTool(
       const trackTitle = title || `Speech: ${text.substring(0, 50)}${text.length > 50 ? "..." : ""}`;
       const batchId = Date.now();
 
-      return {
-        content: [{ type: "text" as const, text: `Generated speech saved to ${filePath}` }],
-        structuredContent: {
-          tracks: [{
-            id: `${batchId}-0`,
-            filePath,
-            title: trackTitle,
-            artist: "ElevenLabs TTS",
-          }],
-        },
-      };
+      return trackQueueResult(`Generated speech saved to ${filePath}`, [{
+        id: `${batchId}-0`,
+        filePath,
+        title: trackTitle,
+        artist: "ElevenLabs TTS",
+      }]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       return {
@@ -249,6 +281,7 @@ server.registerTool(
       duration_seconds: z.number().optional().describe("Duration in seconds (optional)"),
       title: z.string().optional().describe("Display title for the track"),
     },
+    outputSchema: tracksOutputSchema,
     annotations: {
       title: "Generate Sound Effect",
       readOnlyHint: false,
@@ -256,7 +289,7 @@ server.registerTool(
       idempotentHint: false,
       openWorldHint: true,
     },
-    _meta: { ui: { resourceUri: RESOURCE_URI } },
+    _meta: UI_META,
   },
   async ({ prompt, duration_seconds, title }) => {
     try {
@@ -276,17 +309,12 @@ server.registerTool(
       const trackTitle = title || `SFX: ${prompt.substring(0, 50)}${prompt.length > 50 ? "..." : ""}`;
       const batchId = Date.now();
 
-      return {
-        content: [{ type: "text" as const, text: `Generated sound effect saved to ${filePath}` }],
-        structuredContent: {
-          tracks: [{
-            id: `${batchId}-0`,
-            filePath,
-            title: trackTitle,
-            artist: "ElevenLabs SFX",
-          }],
-        },
-      };
+      return trackQueueResult(`Generated sound effect saved to ${filePath}`, [{
+        id: `${batchId}-0`,
+        filePath,
+        title: trackTitle,
+        artist: "ElevenLabs SFX",
+      }]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       return {
@@ -309,6 +337,7 @@ server.registerTool(
       instrumental: z.boolean().optional().describe("Force instrumental only (no vocals)"),
       title: z.string().optional().describe("Display title for the track"),
     },
+    outputSchema: tracksOutputSchema,
     annotations: {
       title: "Generate Music",
       readOnlyHint: false,
@@ -316,7 +345,7 @@ server.registerTool(
       idempotentHint: false,
       openWorldHint: true,
     },
-    _meta: { ui: { resourceUri: RESOURCE_URI } },
+    _meta: UI_META,
   },
   async ({ prompt, duration_seconds, instrumental, title }) => {
     try {
@@ -337,17 +366,12 @@ server.registerTool(
       const trackTitle = title || `Music: ${prompt.substring(0, 50)}${prompt.length > 50 ? "..." : ""}`;
       const batchId = Date.now();
 
-      return {
-        content: [{ type: "text" as const, text: `Generated music saved to ${filePath}` }],
-        structuredContent: {
-          tracks: [{
-            id: `${batchId}-0`,
-            filePath,
-            title: trackTitle,
-            artist: "ElevenLabs Music",
-          }],
-        },
-      };
+      return trackQueueResult(`Generated music saved to ${filePath}`, [{
+        id: `${batchId}-0`,
+        filePath,
+        title: trackTitle,
+        artist: "ElevenLabs Music",
+      }]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       return {

@@ -72,37 +72,51 @@ function useTrackLoader() {
   return ctx;
 }
 
-function parseTracksFromResult(callToolResult: CallToolResult): Track[] {
-  // Prefer structuredContent (v0.4.0+) for type-safe access
-  const structured = callToolResult.structuredContent as PlayAudioStructuredContent | undefined;
-  if (structured?.tracks) {
-    return structured.tracks.map((t) => ({
-      id: t.id,
-      src: null, // Audio not loaded yet - will be lazy loaded on play
-      data: { title: t.title, artist: t.artist, filePath: t.filePath },
-    }));
-  }
+function isServerTrack(value: unknown): value is ServerTrackMetadata {
+  if (!value || typeof value !== "object") return false;
+  const track = value as Partial<ServerTrackMetadata>;
+  return typeof track.id === "string" && typeof track.filePath === "string";
+}
 
-  // Fallback to parsing text content (backwards compatibility)
-  const textContent = callToolResult.content?.find((c) => c.type === "text");
-  if (textContent && "text" in textContent) {
+function coerceTracks(payload: unknown): Track[] {
+  const candidates = Array.isArray(payload)
+    ? payload
+    : (payload as PlayAudioStructuredContent | undefined)?.tracks;
+  if (!Array.isArray(candidates)) return [];
+
+  return candidates.filter(isServerTrack).map((t) => ({
+    id: t.id,
+    src: null, // Audio not loaded yet - will be lazy loaded on play
+    data: { title: t.title ?? t.filePath, artist: t.artist, filePath: t.filePath },
+  }));
+}
+
+function parseTracksFromResult(callToolResult: CallToolResult): Track[] {
+  const fromStructured = coerceTracks(callToolResult.structuredContent);
+  if (fromStructured.length > 0) return fromStructured;
+
+  // Fall back to the serialized queue for hosts that omit structured content.
+  for (const block of callToolResult.content ?? []) {
+    if (block.type !== "text" || !("text" in block)) continue;
     try {
-      const serverTracks: ServerTrackMetadata[] = JSON.parse(textContent.text);
-      return serverTracks.map((t) => ({
-        id: t.id,
-        src: null,
-        data: { title: t.title, artist: t.artist, filePath: t.filePath },
-      }));
+      const fromText = coerceTracks(JSON.parse(block.text));
+      if (fromText.length > 0) return fromText;
     } catch {
-      // Not JSON - likely a summary text, ignore
+      // Ignore human-readable text blocks.
     }
   }
   return [];
 }
 
+function firstTextBlock(callToolResult: CallToolResult): string | null {
+  const block = callToolResult.content?.find((c) => c.type === "text");
+  return block && "text" in block ? block.text : null;
+}
+
 function ElevenLabsPlayerApp() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [failure, setFailure] = useState<string | null>(null);
   const { app, error } = useApp({
     appInfo: IMPLEMENTATION,
     capabilities: {},
@@ -117,17 +131,28 @@ function ElevenLabsPlayerApp() {
       app.ontoolresult = async (result: CallToolResult) => {
         log.info("Tool result received:", result);
         setIsLoading(false);
+
+        if (result.isError) {
+          const message = firstTextBlock(result) ?? "The tool reported an error.";
+          log.error("Tool reported an error:", message);
+          setFailure(message);
+          return;
+        }
+
         const newTracks = parseTracksFromResult(result);
         log.info("Parsed tracks:", newTracks);
-        if (newTracks.length > 0) {
-          setTracks((prev) => {
-            // Deduplicate by track ID
-            const existingIds = new Set(prev.map((t) => t.id));
-            const uniqueNewTracks = newTracks.filter((t) => !existingIds.has(t.id));
-            log.info("Adding tracks:", uniqueNewTracks.length);
-            return [...prev, ...uniqueNewTracks];
-          });
+        if (newTracks.length === 0) {
+          log.warn("Tool result contained no playable tracks:", result);
+          return;
         }
+
+        setFailure(null);
+        setTracks((prev) => {
+          const existingIds = new Set(prev.map((t) => t.id));
+          const uniqueNewTracks = newTracks.filter((t) => !existingIds.has(t.id));
+          log.info("Adding tracks:", uniqueNewTracks.length);
+          return [...prev, ...uniqueNewTracks];
+        });
       };
 
       app.onerror = (err: Error | null) => {
@@ -138,6 +163,7 @@ function ElevenLabsPlayerApp() {
         }
         log.error("App error:", err);
         setIsLoading(false);
+        setFailure(err?.message ?? "Unknown player error");
       };
     },
   });
@@ -150,6 +176,9 @@ function ElevenLabsPlayerApp() {
     return <div className="text-red-500 p-4"><strong>ERROR:</strong> {error.message}</div>;
   }
   if (!app || isLoading) return <div className="text-gray-500 p-4 italic">Loading audio...</div>;
+  if (failure && tracks.length === 0) {
+    return <div className="text-red-500 p-4"><strong>ERROR:</strong> {failure}</div>;
+  }
 
   return <ElevenLabsPlayerAppInner app={app} tracks={tracks} setTracks={setTracks} />;
 }
@@ -435,7 +464,8 @@ function AudioPlayerContent({ app, tracks, setTracks }: AudioPlayerContentProps)
   if (tracks.length === 0) {
     return (
       <div className="p-6 text-gray-500 text-center italic">
-        No audio loaded. Use the play_audio tool to add tracks.
+        The player received a result but no playable tracks. Check the MCP server
+        logs, or call play_audio with an absolute path to an audio file.
       </div>
     );
   }
